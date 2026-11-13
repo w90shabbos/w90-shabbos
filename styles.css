@@ -125,3 +125,10 @@ button { font-family: inherit; }
 .name-btn:active { background: var(--navy); color: #fff; }
 .signin #pin { font-size: 28px; letter-spacing: 10px; text-align: center; padding: 14px 10px 14px 20px; margin-top: 16px; }
 .signin .btn.ghost { margin-top: 10px; }
+
+/* Admin */
+.admin { margin-top: 22px; border-top: 1px solid #e5e1da; padding-top: 16px; }
+.admin-title { font-weight: 700; font-size: 15px; margin-bottom: 10px; }
+.admin-add { display: flex; gap: 8px; margin-bottom: 6px; }
+.admin-add input { flex: 1; border: 1.5px solid var(--navy); border-radius: 10px; padding: 10px 12px; font-size: 16px; }
+.admin .team-row { display: flex; align-items: center; justify-content: space-between; }

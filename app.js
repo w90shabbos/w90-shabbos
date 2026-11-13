@@ -117,21 +117,24 @@ async function toggleAbsence(weekId) {
 /* ---------- rendering ---------- */
 const app = document.getElementById('app');
 
-const ROSTER = [
-  ['Joey', 'joey'], ['Robby', 'robby'], ['Peter', 'peter'], ['Sanet', 'sanet'],
-  ['Rafuel', 'rafuel'], ['Brian', 'brian'], ['Justin', 'justin'], ['Marco', 'marco'], ['Tovia', 'tovia'],
-];
+const ROSTER_FALLBACK = ['Joey', 'Robby', 'Peter', 'Sanet', 'Rafuel', 'Brian', 'Justin', 'Marco', 'Tovia'];
+const ADMIN_ID = 'ae8f7290-e596-486e-8575-fbcf91d7db25';
 
-function renderSignIn(pick) {
+async function renderSignIn(pick) {
   if (!pick) {
+    let names = ROSTER_FALLBACK;
+    try {
+      const { data } = await supabase.from('profiles').select('username').order('username');
+      if (data && data.length) names = data.map(d => d.username);
+    } catch (e) { /* fall back to the built-in list */ }
     app.innerHTML = `
       <h1>W90 Shabbos Coverage</h1>
       <p class="sub">Tap your name to sign in and see the team's calendar.</p>
-      <div class="name-grid">${ROSTER.map(([n]) => `<button type="button" class="name-btn" data-name="${n}">${n}</button>`).join('')}</div>`;
+      <div class="name-grid">${names.map(n => `<button type="button" class="name-btn" data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>`;
     app.querySelectorAll('.name-btn').forEach(b => b.addEventListener('click', () => renderSignIn(b.dataset.name)));
     return;
   }
-  const login = pick.toLowerCase();
+  const login = pick.toLowerCase().replace(/[^a-z0-9]/g, '');
   app.innerHTML = `
     <h1>W90 Shabbos Coverage</h1>
     <p class="sub">Hi ${esc(pick)} - enter your 4-digit PIN.</p>
@@ -269,7 +272,63 @@ function teamTabHtml() {
       <span class="team-count${count === 0 ? ' zero' : ''}">${count === 0 ? 'All in' : count + ' off'}</span>
     </div>`;
   }).join('') + `</div>
-  <p class="note">Shabbosim each person posted as missing, over the next ${WEEK_COUNT} weeks.</p>`;
+  <p class="note">Shabbosim each person posted as missing, over the next ${WEEK_COUNT} weeks.</p>` + adminHtml();
+}
+
+function isAdmin() {
+  return state.session && state.session.user.id === ADMIN_ID;
+}
+
+function adminHtml() {
+  if (!isAdmin()) return '';
+  return `<div class="admin">
+    <div class="admin-title">Manage the team</div>
+    <div class="admin-add">
+      <input id="add-name" placeholder="First name" autocapitalize="words" autocomplete="off">
+      <button type="button" class="btn small primary" id="add-btn">Add guy</button>
+    </div>
+    <div class="error" id="admin-msg"></div>
+    ${state.profiles.filter(p => p.id !== ADMIN_ID).map(p => `
+      <div class="team-row">
+        <span class="team-name">${esc(p.username)}</span>
+        <button type="button" class="btn small ghost" data-remove="${p.id}" data-name="${esc(p.username)}">Remove</button>
+      </div>`).join('')}
+  </div>`;
+}
+
+async function addMember() {
+  const input = document.getElementById('add-name');
+  const msg = document.getElementById('admin-msg');
+  const btn = document.getElementById('add-btn');
+  const name = input.value.trim().replace(/\s+/g, ' ');
+  const login = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!login) { msg.textContent = 'Type a first name.'; return; }
+  if (state.profiles.some(p => p.username.toLowerCase() === name.toLowerCase())) { msg.textContent = 'That name is already on the team.'; return; }
+  btn.disabled = true; msg.textContent = '';
+  const pin = String(Math.floor(1000 + Math.random() * 9000));
+  const temp = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false, storageKey: 'w90-add' } });
+  const { data, error } = await temp.auth.signUp({ email: login + APP_DOMAIN, password: `w90-${login}-${pin}` });
+  if (error || !data.user) {
+    msg.textContent = 'Could not add him - ' + (error ? error.message : 'try again.');
+    btn.disabled = false; return;
+  }
+  const { error: perr } = await supabase.from('profiles').insert({ id: data.user.id, username: name });
+  if (perr) {
+    msg.textContent = 'Could not add him - ' + perr.message;
+    btn.disabled = false; return;
+  }
+  alert(name + ' is on the team. His PIN is ' + pin + ' - send it to him.');
+  await loadData();
+  render();
+}
+
+async function removeMember(id, name) {
+  if (!confirm('Remove ' + name + ' from the team? His posted absences go too.')) return;
+  await supabase.from('absences').delete().eq('user_id', id);
+  const { error } = await supabase.from('profiles').delete().eq('id', id);
+  if (error) { alert('Could not remove him - ' + error.message); return; }
+  await loadData();
+  render();
 }
 
 function render() {
@@ -307,6 +366,9 @@ function render() {
     if (err) alert(err);
     render();
   }));
+  const addBtn = document.getElementById('add-btn');
+  if (addBtn) addBtn.addEventListener('click', addMember);
+  app.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => removeMember(b.dataset.remove, b.dataset.name)));
   document.getElementById('signout-btn').addEventListener('click', async () => {
     await supabase.auth.signOut();
     state.session = null; state.me = null; state.profiles = []; state.absences = [];
@@ -324,6 +386,11 @@ async function boot() {
     await loadData();
   } catch (e) {
     app.innerHTML = `<div class="loading">Could not load the calendar: ${esc(e.message)}</div>`;
+    return;
+  }
+  if (!state.me) {
+    await supabase.auth.signOut();
+    app.innerHTML = '<div class="loading">This login is no longer on the team. Ask Tovia to add you again.</div>';
     return;
   }
   if (!state.selected) state.selected = WEEKS[0].id;

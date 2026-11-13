@@ -118,3 +118,10 @@ button { font-family: inherit; }
 .team-count.zero { color: var(--ink-2); font-weight: 400; }
 
 .footer { color: var(--ink-2); font-size: 13px; margin-top: 28px; border-top: 1px solid var(--hairline); padding-top: 14px; }
+
+/* Simple sign-in */
+.name-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.name-btn { padding: 16px 10px; font-size: 17px; font-weight: 600; border-radius: 12px; border: 1.5px solid var(--navy); background: #fff; color: var(--navy); cursor: pointer; }
+.name-btn:active { background: var(--navy); color: #fff; }
+.signin #pin { font-size: 28px; letter-spacing: 10px; text-align: center; padding: 14px 10px 14px 20px; margin-top: 16px; }
+.signin .btn.ghost { margin-top: 10px; }

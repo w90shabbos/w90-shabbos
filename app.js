@@ -95,9 +95,8 @@ function isOut(userId, weekId) {
 }
 
 /* ---------- actions ---------- */
-async function signIn(username, password) {
-  const uname = username.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  const { error } = await supabase.auth.signInWithPassword({ email: uname + APP_DOMAIN, password });
+async function signIn(login, pin) {
+  const { error } = await supabase.auth.signInWithPassword({ email: login + APP_DOMAIN, password: `w90-${login}-${pin}` });
   return error ? error.message : null;
 }
 async function toggleAbsence(weekId) {
@@ -118,31 +117,47 @@ async function toggleAbsence(weekId) {
 /* ---------- rendering ---------- */
 const app = document.getElementById('app');
 
-function renderSignIn() {
+const ROSTER = [
+  ['Joey', 'joey'], ['Robby', 'robby'], ['Peter', 'peter'], ['Sanet', 'sanet'],
+  ['Rafuel', 'rafuel'], ['Brian', 'brian'], ['Justin', 'justin'], ['Marco', 'marco'], ['Tovia', 'tovia'],
+];
+
+function renderSignIn(pick) {
+  if (!pick) {
+    app.innerHTML = `
+      <h1>W90 Shabbos Coverage</h1>
+      <p class="sub">Tap your name to sign in and see the team's calendar.</p>
+      <div class="name-grid">${ROSTER.map(([n]) => `<button type="button" class="name-btn" data-name="${n}">${n}</button>`).join('')}</div>`;
+    app.querySelectorAll('.name-btn').forEach(b => b.addEventListener('click', () => renderSignIn(b.dataset.name)));
+    return;
+  }
+  const login = pick.toLowerCase();
   app.innerHTML = `
     <h1>W90 Shabbos Coverage</h1>
-    <p class="sub">Sign in to post the Shabbosim you'll miss and see the whole team's calendar.</p>
+    <p class="sub">Hi ${esc(pick)} - enter your 4-digit PIN.</p>
     <form class="signin" id="signin-form">
-      <label for="username">Username</label>
-      <input id="username" autocomplete="username" autocapitalize="none" required>
-      <label for="password">Password</label>
-      <input id="password" type="password" autocomplete="current-password" required>
+      <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="4-digit PIN" required>
       <div class="error" id="signin-error"></div>
       <button class="btn primary" type="submit" id="signin-btn">Sign in</button>
+      <button class="btn ghost" type="button" id="back-btn">Not ${esc(pick)}? Go back</button>
     </form>`;
+  document.getElementById('back-btn').addEventListener('click', () => renderSignIn());
   document.getElementById('signin-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const btn = document.getElementById('signin-btn');
     const err = document.getElementById('signin-error');
+    const pin = document.getElementById('pin').value.trim();
+    if (!/^\d{4}$/.test(pin)) { err.textContent = 'Your PIN is 4 digits.'; return; }
     btn.disabled = true; err.textContent = '';
-    const message = await signIn(document.getElementById('username').value, document.getElementById('password').value);
+    const message = await signIn(login, pin);
     if (message) {
-      err.textContent = message === 'Invalid login credentials' ? 'Wrong username or password.' : message;
+      err.textContent = message === 'Invalid login credentials' ? 'Wrong PIN - try again.' : message;
       btn.disabled = false;
       return;
     }
     await boot();
   });
+  setTimeout(() => document.getElementById('pin').focus(), 50);
 }
 
 function weekSumHtml() {

@@ -99,17 +99,18 @@ async function signIn(login, pin) {
   const { error } = await supabase.auth.signInWithPassword({ email: login + APP_DOMAIN, password: `w90-${login}-${pin}` });
   return error ? error.message : null;
 }
-async function toggleAbsence(weekId) {
-  const mine = isOut(state.session.user.id, weekId);
-  if (mine) {
+async function toggleAbsence(weekId, userId) {
+  const uid = userId || state.session.user.id;
+  const out = isOut(uid, weekId);
+  if (out) {
     const { error } = await supabase.from('absences').delete()
-      .eq('user_id', state.session.user.id).eq('shabbos', weekId);
+      .eq('user_id', uid).eq('shabbos', weekId);
     if (error) return error.message;
-    state.absences = state.absences.filter(a => !(a.shabbos === weekId && a.user_id === state.session.user.id));
+    state.absences = state.absences.filter(a => !(a.shabbos === weekId && a.user_id === uid));
   } else {
-    const { error } = await supabase.from('absences').insert({ user_id: state.session.user.id, shabbos: weekId });
+    const { error } = await supabase.from('absences').insert({ user_id: uid, shabbos: weekId });
     if (error) return error.message;
-    state.absences.push({ user_id: state.session.user.id, shabbos: weekId });
+    state.absences.push({ user_id: uid, shabbos: weekId });
   }
   return null;
 }
@@ -252,13 +253,24 @@ function calendarTabHtml() {
 }
 
 function postTabHtml() {
-  return `<p class="note">Signed in as ${esc(nameOf(state.session.user.id))}. Tap a Shabbos to mark yourself out; tap again to undo.</p>
+  const target = state.postFor || state.session.user.id;
+  const isSelf = target === state.session.user.id;
+  const targetName = nameOf(target);
+  const picker = isAdmin() ? `
+  <div class="post-for">
+    <label for="post-for">Posting for</label>
+    <select id="post-for">
+      ${state.profiles.map(p => `<option value="${p.id}" ${p.id === target ? 'selected' : ''}>${esc(p.username)}${p.id === state.session.user.id ? ' (you)' : ''}</option>`).join('')}
+    </select>
+  </div>` : '';
+  return `<p class="note">${isAdmin() ? 'Pick a name, then tap a Shabbos to mark him out; tap again to undo.' : 'Tap a Shabbos to mark yourself out; tap again to undo.'}</p>` + picker + `
   <div class="post-list">` + WEEKS.map(w => {
-    const mine = isOut(state.session.user.id, w.id);
+    const out = isOut(target, w.id);
+    const label = out ? (isSelf ? "You're out - undo" : esc(targetName) + ' is out - undo') : (isSelf ? "I'm missing this one" : 'Mark ' + esc(targetName) + ' out');
     return `<div class="post-row">
       <span class="post-dates">Shabbos ${esc(w.label)}</span>
-      <button type="button" class="btn small ${mine ? 'selected' : 'primary'}" data-week="${w.id}">
-        ${mine ? "You're out - undo" : "I'm missing this one"}
+      <button type="button" class="btn small ${out ? 'selected' : 'primary'}" data-week="${w.id}">
+        ${label}
       </button>
     </div>`;
   }).join('') + `</div>`;
@@ -327,11 +339,13 @@ async function removeMember(id, name) {
   await supabase.from('absences').delete().eq('user_id', id);
   const { error } = await supabase.from('profiles').delete().eq('id', id);
   if (error) { alert('Could not remove him - ' + error.message); return; }
+  if (state.postFor === id) state.postFor = null;
   await loadData();
   render();
 }
 
 function render() {
+  if (state.postFor && !state.profiles.some(p => p.id === state.postFor)) state.postFor = null;
   const tabs = [['calendar', 'Calendar'], ['post', 'Post time off'], ['team', 'Team']];
   app.innerHTML = `
     <h1>W90 Shabbos Coverage</h1>
@@ -362,10 +376,12 @@ function render() {
   });
   document.querySelectorAll('.post-row [data-week]').forEach(b => b.addEventListener('click', async () => {
     b.disabled = true;
-    const err = await toggleAbsence(b.dataset.week);
+    const err = await toggleAbsence(b.dataset.week, state.postFor || state.session.user.id);
     if (err) alert(err);
     render();
   }));
+  const postFor = document.getElementById('post-for');
+  if (postFor) postFor.addEventListener('change', () => { state.postFor = postFor.value; render(); });
   const addBtn = document.getElementById('add-btn');
   if (addBtn) addBtn.addEventListener('click', addMember);
   app.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => removeMember(b.dataset.remove, b.dataset.name)));

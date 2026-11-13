@@ -1,4 +1,4 @@
-const CACHE = 'w90-shell-v6';
+const CACHE = 'w90-shell-v7';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

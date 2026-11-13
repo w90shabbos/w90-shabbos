@@ -132,3 +132,6 @@ button { font-family: inherit; }
 .admin-add { display: flex; gap: 8px; margin-bottom: 6px; }
 .admin-add input { flex: 1; border: 1.5px solid var(--navy); border-radius: 10px; padding: 10px 12px; font-size: 16px; }
 .admin .team-row { display: flex; align-items: center; justify-content: space-between; }
+.post-for { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.post-for label { font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.post-for select { flex: 1; padding: 10px; border: 1px solid var(--line, #d8dce2); border-radius: 8px; font-size: 15px; background: #fff; }

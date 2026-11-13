@@ -1,4 +1,4 @@
-const CACHE = 'w90-shell-v1';
+const CACHE = 'w90-shell-v2';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './config.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -12,11 +12,12 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   // App data and candle times always come from the network.
   if (url.origin !== self.location.origin) return;
+  // Network-first so updates reach everyone; cache is the offline fallback.
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
+    fetch(e.request).then(res => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
       return res;
-    }))
+    }).catch(() => caches.match(e.request))
   );
 });
